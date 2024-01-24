@@ -1,4 +1,4 @@
-import { Line, themeLine } from "./line.js";
+import { LineType, themeLine } from "./line.js";
 
 const commands = document.querySelector('#commands');
 
@@ -11,6 +11,6 @@ for (let controlLine of controlValue.split('\n')) {
 }
 
 commands.value = "";
-for (let lineType of Line.types) {
+for (let lineType of LineType.types) {
 	commands.value += `${lineType.print()}\n`;
 }

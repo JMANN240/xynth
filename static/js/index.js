@@ -1,19 +1,38 @@
-import { Line } from './line.js';
+import { LineType, themeLine } from './line.js';
 import { randint } from './util.js';
 
 const control = document.querySelector('#control');
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 
-const oscillators = [];
+let oscillators = [];
 let connections = [];
+
+export {oscillators};
 
 const createConnections = () => {
 	for (let connection of connections) {
 		const input = window[connection.input];
 		const output = window[connection.output];
 		if (input && output) {
-			input.connect(output);
+			try {
+				input.connect(output);
+			} catch (error) {
+				console.error(error);
+			}
+		}
+	}
+}
+
+const deleteConnections = () => {
+	for (let connection of connections) {
+		const input = window[connection.input];
+		if (input) {
+			try {
+				input.disconnect();
+			} catch (error) {
+				console.error(error);
+			}
 		}
 	}
 }
@@ -21,9 +40,16 @@ const createConnections = () => {
 const parseControlLine = (controlLine) => {
 	controlLine = controlLine.replace(/\s/g, '');
 
-	for (let lineType of Line.types) {
-		if (lineType.parse(controlLine)) {
-			return;
+	for (let lineType of LineType.types) {
+		const lineResult = lineType.parse(context, controlLine);
+		if (lineResult) {
+			if ('oscillator' in lineResult.result) {
+				oscillators.push(lineResult.result.oscillator);
+			}
+
+			if (lineResult.connection) {
+				connections.push(lineResult.connection);
+			}
 		}
 	}
 }
@@ -43,31 +69,28 @@ masterVolume.gain.value = 0.2;
 window.master = masterVolume;
 
 control.value = localStorage.getItem('control');
-parseControl(context, masterVolume);
-createConnections();
+
+for (let controlLine of control.value.split('\n')) {
+	if (themeLine.parse(context, controlLine)) {
+		break;
+	}
+}
 
 control.addEventListener('input', () => {
 	localStorage.setItem('control', control.value);
-	for (let connection of connections) {
-		const input = window[connection.input];
-		const output = window[connection.output];
-		if (input && output) {
-			input.disconnect(output);
-		}
-	}
+	deleteConnections();
+	console.log("Stopping oscillators");
+	console.log(oscillators);
 	for (let oscillator of oscillators) {
 		oscillator.stop();
 	}
+	oscillators = [];
 	connections = [];
 	parseControl();
 	createConnections();
-	const osc = context.createOscillator();
-	const noteGain = context.createGain();
-	noteGain.gain.value = 1;
-	osc.type = 'square';
-	osc.frequency.setValueAtTime(220 + 220 * Math.pow(2, randint(0, 12)/12), context.currentTime);
-	osc.start(context.currentTime);
-	osc.stop(context.currentTime + 0.1);
-	osc.connect(noteGain);
-	noteGain.connect(masterVolume);
+	console.log("Starting oscillators");
+	console.log(oscillators);
+	for (let oscillator of oscillators) {
+		oscillator.start();
+	}
 });

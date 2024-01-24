@@ -1,4 +1,4 @@
-export class Line {
+export class LineType {
 	static types = [];
 
 	constructor(name, pattern, handler) {
@@ -6,21 +6,28 @@ export class Line {
 		this.pattern = pattern;
 		this.handler = handler;
 
-		Line.types.push(this);
+		LineType.types.push(this);
 	}
 
-	parse(line) {
+	parse(context, line) {
 		const result = this.pattern.exec(line);
 
 		if (result) {
-			this.handler(result.groups)
+			return this.handler(context, result.groups)
 		}
 
-		return Boolean(result);
+		return null;
 	}
 
 	print() {
 		return `${this.name}\n`;
+	}
+}
+
+class LineResult {
+	constructor(result, connection) {
+		this.result = result;
+		this.connection = connection;
 	}
 }
 
@@ -32,13 +39,21 @@ const wordParameter = (name) => {
 	return namedParameter(name, '\\w+');
 }
 
-const digitParameter = (name) => {
+const intParameter = (name) => {
 	return namedParameter(name, '\\d+');
+}
+
+const floatParameter = (name) => {
+	return namedParameter(name, '\\d+(?:\\.\\d+)?');
 }
 
 const alternativesParameter = (name, ...alternatives) => {
 	const alternativesPattern = alternatives.join('|');
 	return namedParameter(name, alternativesPattern);
+}
+
+const dottedWordParameter = (name) => {
+	return namedParameter(name, '[\\w\\.]+');
 }
 
 const linePattern = (pattern) => {
@@ -50,18 +65,18 @@ const THEME_REGEX = linePattern(
 );
 
 const OSCILLATOR_REGEX = linePattern(
-	`${wordParameter('name')}=osc\\.${alternativesParameter('shape', 'sine', 'square', 'triangle', 'saw')}\\.${digitParameter('frequency')}>${wordParameter('output')}`
+	`${wordParameter('name')}=osc\\.${alternativesParameter('shape', 'sine', 'square', 'triangle', 'sawtooth')}~${floatParameter('frequency')}>${dottedWordParameter('output')}`
 );
 
 const GAIN_REGEX = linePattern(
-	`${wordParameter('name')}=gain\\.${digitParameter('level')}>${wordParameter('output')}`
+	`${wordParameter('name')}=gain\\^${floatParameter('level')}>${dottedWordParameter('output')}`
 );
 
 const FILTER_REGEX = linePattern(
-	`${wordParameter('name')}=filter\\.${alternativesParameter('type', 'lowpass', 'highpass')}\\.${digitParameter('frequency')}>${wordParameter('output')}`
+	`${wordParameter('name')}=filter\\.${alternativesParameter('type', 'lowpass', 'highpass')}~${floatParameter('frequency')}>${dottedWordParameter('output')}`
 );
 
-export const themeLine = new Line("Theme", THEME_REGEX, ({theme}) => {
+export const themeLine = new LineType("Theme", THEME_REGEX, (context, {theme}) => {
 	if (theme === 'light') {
 		document.body.classList.remove('theme-dark');
 		document.body.classList.add('theme-light');
@@ -69,40 +84,33 @@ export const themeLine = new Line("Theme", THEME_REGEX, ({theme}) => {
 		document.body.classList.remove('theme-light');
 		document.body.classList.add('theme-dark');
 	}
+
+	return new LineResult({ 'theme': theme }, null);
 });
 
-export const oscillatorLine = new Line("Oscillator", OSCILLATOR_REGEX, ({name, shape, frequency, output}) => {
-	const osc = context.createOscillator();
-	osc.type = shape;
-	osc.frequency.value = frequency;
-	osc.start();
-	if (!oscillators.includes(osc)) {
-		oscillators.push(osc);
-	}
-	connections.push({
-		input: name,
-		output: output
-	});
-	window[name] = osc;
+export const oscillatorLine = new LineType("Oscillator", OSCILLATOR_REGEX, (context, {name, shape, frequency, output}) => {
+	const oscillator = context.createOscillator();
+	oscillator.type = shape;
+	oscillator.frequency.value = frequency;
+	window[name] = oscillator;
+	window[`${name}.frequency`] = oscillator.frequency;
+
+	return new LineResult({ 'oscillator': oscillator }, { input: name, output: output });
 });
 
-export const gainLine = new Line("Gain", GAIN_REGEX, ({name, level, output}) => {
+export const gainLine = new LineType("Gain", GAIN_REGEX, (context, {name, level, output}) => {
 	const gain = context.createGain();
-	gain.gain.value = level / 100;
-	connections.push({
-		input: name,
-		output: output
-	});
+	gain.gain.value = level;
 	window[name] = gain;
+
+	return new LineResult({ 'gain': gain }, { input: name, output: output });
 });
 
-export const filterLine = new Line("Filter", FILTER_REGEX, ({name, type, frequency, output}) => {
+export const filterLine = new LineType("Filter", FILTER_REGEX, (context, {name, type, frequency, output}) => {
 	const filter = context.createBiquadFilter();
 	filter.type = type;
 	filter.frequency.value = frequency;
-	connections.push({
-		input: name,
-		output: output
-	});
 	window[name] = filter;
+
+	return new LineResult({ 'filter': filter }, { input: name, output: output });
 });
