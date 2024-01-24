@@ -24,7 +24,7 @@ body {
 	background-color: var(--bg);
 }
 
-#control {
+textarea {
 	--offset: 0.25em;
 	--blur: 0.5em;
 	--spread: 0.125em;
@@ -39,6 +39,6 @@ body {
 	resize: none;
 }
 
-#control:focus {
+textarea:focus {
 	outline: none;
 }
