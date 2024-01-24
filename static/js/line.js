@@ -24,6 +24,28 @@ export class LineType {
 	}
 }
 
+class LineTypeBuilder {
+	constructor(name) {
+		this.name = name;
+	}
+
+	addParameter(symbol, pattern) {
+
+	}
+
+	setHandler(handler) {
+		this.handler = handler;
+	}
+
+	getPattern() {
+		return '';
+	}
+
+	create() {
+		return new LineType(this.name, this.getPattern(), this.handler);
+	}
+}
+
 class LineResult {
 	constructor(result, connection) {
 		this.result = result;
@@ -35,12 +57,49 @@ const namedParameter = (name, pattern) => {
 	return `(?<${name}>${pattern})`;
 }
 
-const wordParameter = (name) => {
-	return namedParameter(name, '\\w+');
+class WordParameter {
+	constructor(name) {
+		this.name = name;
+	}
+
+	getPattern() {
+		return namedParameter(this.name, '\\w+');
+	}
 }
 
-const intParameter = (name) => {
-	return namedParameter(name, '\\d+');
+class NumberParameter {
+	constructor(name) {
+		this.name = name;
+	}
+
+	getPattern() {
+		return namedParameter(this.name, '\\d+(?:\\.\\d+)?');
+	}
+}
+
+class AlternativesParameter {
+	constructor(name, ...alternatives) {
+		this.name = name;
+		this.alternatives = alternatives;
+	}
+
+	getPattern() {
+		return namedParameter(this.name, alternatives.join('|'));
+	}
+}
+
+class DottedWordParameter {
+	constructor(name) {
+		this.name = name;
+	}
+
+	getPattern() {
+		return namedParameter(this.name, '\\w+');
+	}
+}
+
+const wordParameter = (name) => {
+	return namedParameter(name, '\\w+');
 }
 
 const floatParameter = (name) => {
