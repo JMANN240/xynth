@@ -4,10 +4,8 @@ const control = document.querySelector('#control');
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 
-let oscillators = [];
+let sources = [];
 let connections = [];
-
-export {oscillators};
 
 const createConnections = () => {
 	for (let connection of connections) {
@@ -44,7 +42,15 @@ const parseControlLine = (controlLine) => {
 		console.log(`${lineType.name}: ${lineResult}`);
 		if (lineResult) {
 			if ('oscillator' in lineResult.result) {
-				oscillators.push(lineResult.result.oscillator);
+				sources.push(lineResult.result.oscillator);
+			}
+
+			if ('noise' in lineResult.result) {
+				sources.push(lineResult.result.noise);
+			}
+
+			if ('pulse' in lineResult.result) {
+				sources.push(lineResult.result.pulse);
 			}
 
 			if (lineResult.connection) {
@@ -81,14 +87,14 @@ for (let controlLine of control.value.split('\n')) {
 control.addEventListener('input', () => {
 	localStorage.setItem('control', control.value);
 	deleteConnections();
-	for (let oscillator of oscillators) {
-		oscillator.stop();
+	for (let source of sources) {
+		source.stop();
 	}
-	oscillators = [];
+	sources = [];
 	connections = [];
 	parseControl();
 	createConnections();
-	for (let oscillator of oscillators) {
-		oscillator.start();
+	for (let source of sources) {
+		source.start();
 	}
 });

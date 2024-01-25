@@ -1,3 +1,5 @@
+import { randreal } from "./util.js";
+
 export class LineType {
 	static types = [];
 
@@ -212,8 +214,62 @@ export const filterLine = new LineTypeBuilder("Filter")
 			filter.type = type;
 			filter.frequency.value = frequency;
 			window[name] = filter;
+			window[`${name}.frequency`] = filter.frequency;
 		
 			return new LineResult({ 'filter': filter }, { input: name, output: output });
+		}
+	)
+	.build();
+
+export const noiseLine = new LineTypeBuilder("Noise")
+	.addParameter('', new WordParameter('name'))
+	.addParameter('=', new ConstantParameter('noise'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {name, output}) => {
+			const bufferSize = context.sampleRate * 60;
+			const buffer = new AudioBuffer({
+				length: bufferSize,
+				sampleRate: context.sampleRate
+			});
+			const data = buffer.getChannelData(0);
+			for (let i = 0; i < bufferSize; i++) {
+				data[i] = randreal(-1, 1);
+			}
+			const noise = context.createBufferSource()
+			noise.buffer = buffer;
+			noise.loop = true;
+			window[name] = noise;
+		
+			return new LineResult({ 'noise': noise }, { input: name, output: output });
+		}
+	)
+	.build();
+
+export const pulseLine = new LineTypeBuilder("Pulse")
+	.addParameter('', new WordParameter('name'))
+	.addParameter('=', new ConstantParameter('pulse'))
+	.addParameter('~', new NumberParameter('frequency'))
+	.addParameter('_', new NumberParameter('duty'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {name, frequency, duty, output}) => {
+			const bufferSize = context.sampleRate;
+			const buffer = new AudioBuffer({
+				length: bufferSize,
+				sampleRate: context.sampleRate
+			});
+			const data = buffer.getChannelData(0);
+			for (let i = 0; i < bufferSize; i++) {
+				data[i] = ((i / bufferSize) > duty) ? -1 : 1;
+			}
+			const pulse = context.createBufferSource()
+			pulse.buffer = buffer;
+			pulse.loop = true;
+			pulse.playbackRate.value = frequency;
+			window[name] = pulse;
+		
+			return new LineResult({ 'pulse': pulse }, { input: name, output: output });
 		}
 	)
 	.build();
