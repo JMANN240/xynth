@@ -1,17 +1,26 @@
 export class LineType {
 	static types = [];
 
-	constructor(name, pattern, handler) {
+	constructor(name, parameters, handler) {
 		this.name = name;
-		this.pattern = pattern;
+		this.parameters = parameters;
 		this.handler = handler;
 
 		LineType.types.push(this);
 	}
 
-	parse(context, line) {
-		const result = this.pattern.exec(line);
+	getPattern() {
+		let pattern = '';
+		for (let parameter of this.parameters) {
+			pattern += parameter.symbol;
+			pattern += parameter.parameter.getPattern();
+		}
+		return linePattern(pattern);
+	}
 
+	parse(context, line) {
+		const result = this.getPattern().exec(line);
+		console.log(`Parsing '${line}'`);
 		if (result) {
 			return this.handler(context, result.groups)
 		}
@@ -20,29 +29,35 @@ export class LineType {
 	}
 
 	print() {
-		return `${this.name}\n`;
+		let output = `${this.name}\n`
+		for (let parameter of this.parameters) {
+			output += `\t${parameter.symbol}${parameter.parameter.print()}\n`;
+		}
+		return output;
 	}
 }
 
 class LineTypeBuilder {
 	constructor(name) {
 		this.name = name;
+		this.parameters = [];
 	}
 
-	addParameter(symbol, pattern) {
-
+	addParameter(symbol, parameter) {
+		this.parameters.push({
+			'symbol': symbol,
+			'parameter': parameter
+		});
+		return this;
 	}
 
 	setHandler(handler) {
 		this.handler = handler;
+		return this;
 	}
 
-	getPattern() {
-		return '';
-	}
-
-	create() {
-		return new LineType(this.name, this.getPattern(), this.handler);
+	build() {
+		return new LineType(this.name, this.parameters, this.handler);
 	}
 }
 
@@ -57,119 +72,148 @@ const namedParameter = (name, pattern) => {
 	return `(?<${name}>${pattern})`;
 }
 
-class WordParameter {
-	constructor(name) {
-		this.name = name;
-	}
-
+class Parameter {
 	getPattern() {
-		return namedParameter(this.name, '\\w+');
+		return namedParameter(this.name, this.pattern);
 	}
 }
 
-class NumberParameter {
-	constructor(name) {
-		this.name = name;
+class ConstantParameter extends Parameter {
+	constructor(pattern) {
+		super();
+		this.name = pattern;
+		this.pattern = pattern;
 	}
 
 	getPattern() {
-		return namedParameter(this.name, '\\d+(?:\\.\\d+)?');
+		return this.pattern;
+	}
+
+	print() {
+		return `${this.pattern}`;
 	}
 }
 
-class AlternativesParameter {
+class WordParameter extends Parameter {
+	constructor(name) {
+		super();
+		this.name = name;
+		this.pattern = '\\w+';
+	}
+
+	print() {
+		return `${this.name} (word)`;
+	}
+}
+
+class NumberParameter extends Parameter {
+	constructor(name) {
+		super();
+		this.name = name;
+		this.pattern = '\\d+(?:\\.\\d+)?';
+	}
+
+	print() {
+		return `${this.name} (number)`;
+	}
+}
+
+class AlternativesParameter extends Parameter {
 	constructor(name, ...alternatives) {
+		super();
 		this.name = name;
 		this.alternatives = alternatives;
+		this.pattern = this.alternatives.join('|')
 	}
 
-	getPattern() {
-		return namedParameter(this.name, alternatives.join('|'));
+	print() {
+		return `${this.name} (${this.alternatives.join(', ')})`;
 	}
 }
 
-class DottedWordParameter {
+class DottedWordParameter extends Parameter {
 	constructor(name) {
+		super();
 		this.name = name;
+		this.pattern = '\\w+(?:\\.\\w+)*';
 	}
 
-	getPattern() {
-		return namedParameter(this.name, '\\w+');
+	print() {
+		return `${this.name} (dotted word)`;
 	}
-}
-
-const wordParameter = (name) => {
-	return namedParameter(name, '\\w+');
-}
-
-const floatParameter = (name) => {
-	return namedParameter(name, '\\d+(?:\\.\\d+)?');
-}
-
-const alternativesParameter = (name, ...alternatives) => {
-	const alternativesPattern = alternatives.join('|');
-	return namedParameter(name, alternativesPattern);
-}
-
-const dottedWordParameter = (name) => {
-	return namedParameter(name, '[\\w\\.]+');
 }
 
 const linePattern = (pattern) => {
 	return new RegExp(`^${pattern}$`);
 }
 
-const THEME_REGEX = linePattern(
-	alternativesParameter('theme', 'light', 'dark')
-);
+export const themeLine = new LineTypeBuilder("Theme")
+	.addParameter('', new AlternativesParameter('theme', 'light', 'dark'))
+	.setHandler(
+		(context, {theme}) => {
+			if (theme === 'light') {
+				document.body.classList.remove('theme-dark');
+				document.body.classList.add('theme-light');
+			} else if (theme === 'dark') {
+				document.body.classList.remove('theme-light');
+				document.body.classList.add('theme-dark');
+			}
+		
+			return new LineResult({ 'theme': theme }, null);
+		}
+	)
+	.build();
 
-const OSCILLATOR_REGEX = linePattern(
-	`${wordParameter('name')}=osc\\.${alternativesParameter('shape', 'sine', 'square', 'triangle', 'sawtooth')}~${floatParameter('frequency')}>${dottedWordParameter('output')}`
-);
+export const oscillatorLine = new LineTypeBuilder("Oscillator")
+	.addParameter('', new WordParameter('name'))
+	.addParameter('=', new ConstantParameter('osc'))
+	.addParameter('.', new AlternativesParameter('shape', 'sine', 'square', 'triangle', 'sawtooth'))
+	.addParameter('~', new NumberParameter('frequency'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {name, shape, frequency, output}) => {
+			const oscillator = context.createOscillator();
+			oscillator.type = shape;
+			oscillator.frequency.value = frequency;
+			window[name] = oscillator;
+			window[`${name}.frequency`] = oscillator.frequency;
 
-const GAIN_REGEX = linePattern(
-	`${wordParameter('name')}=gain\\^${floatParameter('level')}>${dottedWordParameter('output')}`
-);
+			return new LineResult({ 'oscillator': oscillator }, { input: name, output: output });
+		}
+	)
+	.build();
 
-const FILTER_REGEX = linePattern(
-	`${wordParameter('name')}=filter\\.${alternativesParameter('type', 'lowpass', 'highpass')}~${floatParameter('frequency')}>${dottedWordParameter('output')}`
-);
+export const gainLine = new LineTypeBuilder("Gain")
+	.addParameter('', new WordParameter('name'))
+	.addParameter('=', new ConstantParameter('gain'))
+	.addParameter('\\^', new NumberParameter('level'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {name, level, output}) => {
+			const gain = context.createGain();
+			gain.gain.value = level;
+			window[name] = gain;
+			window[`${name}.gain`] = gain.gain;
 
-export const themeLine = new LineType("Theme", THEME_REGEX, (context, {theme}) => {
-	if (theme === 'light') {
-		document.body.classList.remove('theme-dark');
-		document.body.classList.add('theme-light');
-	} else if (theme === 'dark') {
-		document.body.classList.remove('theme-light');
-		document.body.classList.add('theme-dark');
-	}
+			return new LineResult({ 'gain': gain }, { input: name, output: output });
+		}
+	)
+	.build();
 
-	return new LineResult({ 'theme': theme }, null);
-});
-
-export const oscillatorLine = new LineType("Oscillator", OSCILLATOR_REGEX, (context, {name, shape, frequency, output}) => {
-	const oscillator = context.createOscillator();
-	oscillator.type = shape;
-	oscillator.frequency.value = frequency;
-	window[name] = oscillator;
-	window[`${name}.frequency`] = oscillator.frequency;
-
-	return new LineResult({ 'oscillator': oscillator }, { input: name, output: output });
-});
-
-export const gainLine = new LineType("Gain", GAIN_REGEX, (context, {name, level, output}) => {
-	const gain = context.createGain();
-	gain.gain.value = level;
-	window[name] = gain;
-
-	return new LineResult({ 'gain': gain }, { input: name, output: output });
-});
-
-export const filterLine = new LineType("Filter", FILTER_REGEX, (context, {name, type, frequency, output}) => {
-	const filter = context.createBiquadFilter();
-	filter.type = type;
-	filter.frequency.value = frequency;
-	window[name] = filter;
-
-	return new LineResult({ 'filter': filter }, { input: name, output: output });
-});
+export const filterLine = new LineTypeBuilder("Filter")
+	.addParameter('', new WordParameter('name'))
+	.addParameter('=', new ConstantParameter('filter'))
+	.addParameter('.', new AlternativesParameter('type', 'lowpass', 'highpass'))
+	.addParameter('~', new NumberParameter('frequency'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {name, type, frequency, output}) => {
+			const filter = context.createBiquadFilter();
+			filter.type = type;
+			filter.frequency.value = frequency;
+			window[name] = filter;
+		
+			return new LineResult({ 'filter': filter }, { input: name, output: output });
+		}
+	)
+	.build();

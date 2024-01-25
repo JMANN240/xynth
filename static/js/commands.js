@@ -5,7 +5,7 @@ const commands = document.querySelector('#commands');
 const controlValue = localStorage.getItem('control');
 
 for (let controlLine of controlValue.split('\n')) {
-	if (themeLine.parse(controlLine)) {
+	if (themeLine.parse(null, controlLine)) {
 		break;
 	}
 }

@@ -1,5 +1,4 @@
 import { LineType, themeLine } from './line.js';
-import { randint } from './util.js';
 
 const control = document.querySelector('#control');
 
@@ -42,6 +41,7 @@ const parseControlLine = (controlLine) => {
 
 	for (let lineType of LineType.types) {
 		const lineResult = lineType.parse(context, controlLine);
+		console.log(`${lineType.name}: ${lineResult}`);
 		if (lineResult) {
 			if ('oscillator' in lineResult.result) {
 				oscillators.push(lineResult.result.oscillator);
@@ -50,6 +50,8 @@ const parseControlLine = (controlLine) => {
 			if (lineResult.connection) {
 				connections.push(lineResult.connection);
 			}
+
+			break;
 		}
 	}
 }
@@ -79,8 +81,6 @@ for (let controlLine of control.value.split('\n')) {
 control.addEventListener('input', () => {
 	localStorage.setItem('control', control.value);
 	deleteConnections();
-	console.log("Stopping oscillators");
-	console.log(oscillators);
 	for (let oscillator of oscillators) {
 		oscillator.stop();
 	}
@@ -88,8 +88,6 @@ control.addEventListener('input', () => {
 	connections = [];
 	parseControl();
 	createConnections();
-	console.log("Starting oscillators");
-	console.log(oscillators);
 	for (let oscillator of oscillators) {
 		oscillator.start();
 	}
