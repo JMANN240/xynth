@@ -22,7 +22,6 @@ export class LineType {
 
 	parse(context, line) {
 		const result = this.getPattern().exec(line);
-		console.log(`Parsing '${line}'`);
 		if (result) {
 			return this.handler(context, result.groups)
 		}
@@ -270,6 +269,39 @@ export const pulseLine = new LineTypeBuilder("Pulse")
 			window[name] = pulse;
 		
 			return new LineResult({ 'pulse': pulse }, { input: name, output: output });
+		}
+	)
+	.build();
+
+export const loopLine = new LineTypeBuilder("Loop")
+	.addParameter('', new ConstantParameter('loop'))
+	.addParameter('=', new NumberParameter('length'))
+	.setHandler(
+		(context, {length}) => {
+			window['length'] = length;
+		}
+	)
+	.build();
+
+export const tempoLine = new LineTypeBuilder("Tempo")
+	.addParameter('', new ConstantParameter('tempo'))
+	.addParameter('=', new NumberParameter('speed'))
+	.setHandler(
+		(context, {speed}) => {
+			window['speed'] = speed;
+		}
+	)
+	.build();
+
+export const timedConstLine = new LineTypeBuilder("Timed Constant")
+	.addParameter('', new ConstantParameter('const'))
+	.addParameter('\\^', new NumberParameter('value'))
+	.addParameter('\\|', new NumberParameter('start'))
+	.addParameter('-', new NumberParameter('length'))
+	.addParameter('>', new DottedWordParameter('output'))
+	.setHandler(
+		(context, {value, start, length, output}) => {
+			return new LineResult({ 'timedConst': {value, start, length, output} }, null);
 		}
 	)
 	.build();

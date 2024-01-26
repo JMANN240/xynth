@@ -6,13 +6,17 @@ const AudioContext = window.AudioContext || window.webkitAudioContext;
 
 let sources = [];
 let connections = [];
+let timedConstants = [];
 
 const createConnections = () => {
 	for (let connection of connections) {
+		console.log(connection);
 		const input = window[connection.input];
 		const output = window[connection.output];
 		if (input && output) {
 			try {
+				console.log(input);
+				console.log(output);
 				input.connect(output);
 			} catch (error) {
 				console.error(error);
@@ -39,7 +43,6 @@ const parseControlLine = (controlLine) => {
 
 	for (let lineType of LineType.types) {
 		const lineResult = lineType.parse(context, controlLine);
-		console.log(`${lineType.name}: ${lineResult}`);
 		if (lineResult) {
 			if ('oscillator' in lineResult.result) {
 				sources.push(lineResult.result.oscillator);
@@ -51,6 +54,10 @@ const parseControlLine = (controlLine) => {
 
 			if ('pulse' in lineResult.result) {
 				sources.push(lineResult.result.pulse);
+			}
+
+			if ('timedConst' in lineResult.result) {
+				timedConstants.push(lineResult.result.timedConst);
 			}
 
 			if (lineResult.connection) {
@@ -92,9 +99,27 @@ control.addEventListener('input', () => {
 	}
 	sources = [];
 	connections = [];
+	timedConstants = [];
 	parseControl();
 	createConnections();
 	for (let source of sources) {
 		source.start();
 	}
 });
+
+let loopTime = 0;
+
+const update = () => {
+	loopTime = (context.currentTime * (window.speed ?? 1)) % (window.length ?? 4);
+	for (let timedConstant of timedConstants) {
+		const afterStart = loopTime >= parseInt(timedConstant.start);
+		const beforeStop = loopTime < (parseInt(timedConstant.start) + parseInt(timedConstant.length));
+		const inTime = afterStart && beforeStop; 
+		if (inTime && window[timedConstant.output]) {
+			window[timedConstant.output].value = timedConstant.value;
+		}
+	}
+	setTimeout(update, 10);
+}
+
+update();
